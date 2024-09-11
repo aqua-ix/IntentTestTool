@@ -2,6 +2,7 @@ package com.example.intenttesttool
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -41,34 +42,51 @@ class MainActivity : ComponentActivity() {
                     ) {
                         val context = LocalContext.current
 
-                        var packageName by remember { mutableStateOf("com.example.app") }
-                        var className by remember { mutableStateOf("com.example.app.MainActivity") }
-                        var action by remember { mutableStateOf("") }
-                        val selectedFlags = remember { mutableStateListOf<Int>() }
+                        var packageName by remember { mutableStateOf(loadString("packageName", "com.example.app")) }
+                        var className by remember { mutableStateOf(loadString("className", "com.example.app.MainActivity")) }
+                        var action by remember { mutableStateOf(loadString("action", "")) }
+                        val selectedFlags = remember { mutableStateListOf<Int>().apply {
+                            addAll(loadSelectedFlags())
+                        }}
 
                         Spacer(modifier = Modifier.height(16.dp))
 
                         ParamInput(
                             label = "Package Name",
                             value = packageName,
-                            onValueChange = { packageName = it }
+                            onValueChange = {
+                                packageName = it
+                                saveString("packageName", it)
+                            }
                         )
 
                         ParamInput(
                             label = "Class Name",
                             value = className,
-                            onValueChange = { className = it }
+                            onValueChange = {
+                                className = it
+                                saveString("className", it)
+                            }
                         )
 
                         ParamInput(
                             label = "Action",
                             value = action,
-                            onValueChange = { action = it }
+                            onValueChange = {
+                                action = it
+                                saveString("action", it)
+                            }
                         )
 
-                        FlagSelector(selectedFlags = selectedFlags)
+                        FlagSelector(
+                            selectedFlags = selectedFlags,
+                            onFlagsChanged = { saveSelectedFlags(selectedFlags) }
+                        )
 
-                        SelectedFlags(selectedFlags = selectedFlags)
+                        SelectedFlags(
+                            selectedFlags = selectedFlags,
+                            onFlagsChanged = { saveSelectedFlags(selectedFlags) }
+                        )
 
                         LaunchButton(
                             label = "Launch Intent",
@@ -87,11 +105,32 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun saveString(key: String, value: String) {
+        sharedPreferences.edit().putString(key, value).apply()
+    }
+
+    private fun loadString(key: String, defaultValue: String): String {
+        return sharedPreferences.getString(key, defaultValue) ?: defaultValue
+    }
+
+    private fun saveSelectedFlags(flags: List<Int>) {
+        sharedPreferences.edit().putString("selectedFlags", flags.joinToString(",")).apply()
+    }
+
+    private fun loadSelectedFlags(): List<Int> {
+        val savedString = sharedPreferences.getString("selectedFlags", "") ?: ""
+        return if (savedString.isNotEmpty()) {
+            savedString.split(",").map { it.toInt() }
+        } else {
+            emptyList()
+        }
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FlagSelector(selectedFlags: MutableList<Int>) {
+fun FlagSelector(selectedFlags: MutableList<Int>, onFlagsChanged: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val flags = listOf(
         Intent.FLAG_ACTIVITY_NEW_TASK,
@@ -124,6 +163,7 @@ fun FlagSelector(selectedFlags: MutableList<Int>) {
                     onClick = {
                         if (flag !in selectedFlags) {
                             selectedFlags.add(flag)
+                            onFlagsChanged()
                         }
                         expanded = false
                     }
@@ -134,7 +174,7 @@ fun FlagSelector(selectedFlags: MutableList<Int>) {
 }
 
 @Composable
-fun SelectedFlags(selectedFlags: MutableList<Int>) {
+fun SelectedFlags(selectedFlags: MutableList<Int>, onFlagsChanged: () -> Unit) {
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.heightIn(max = 200.dp)
@@ -151,7 +191,10 @@ fun SelectedFlags(selectedFlags: MutableList<Int>) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(getFlagName(flag))
-                    IconButton(onClick = { selectedFlags.remove(flag) }) {
+                    IconButton(onClick = {
+                        selectedFlags.remove(flag)
+                        onFlagsChanged()
+                    }) {
                         Icon(Icons.Filled.Close, contentDescription = "Remove flag")
                     }
                 }
